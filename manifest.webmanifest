@@ -1,0 +1,22 @@
+{
+  "name": "Gym Progress",
+  "short_name": "Gym Progress",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f2",
+  "theme_color": "#f4f7f2",
+  "description": "Training, Trainingsplan und Körpergewicht tracken",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
