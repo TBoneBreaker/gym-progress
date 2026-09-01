@@ -27,8 +27,12 @@
     .patchBodyWeightStep .patchBwBtn{border:1px solid #bedcf7;background:#edf6ff;color:#3375a7;border-radius:13px;font-size:11px;font-weight:850;touch-action:manipulation}
     .patchBodyWeightStep .patchBwBtn:active{transform:scale(.96)}
     .patchBodyWeightStep #weightInput{font-size:20px!important;padding:11px 4px!important;text-align:center!important;font-variant-numeric:tabular-nums}
+    #weightChart{width:100%!important;max-width:100%!important;overflow:hidden!important}
+    #weightChart svg[data-patch-weight-chart]{display:block;width:100%!important;max-width:100%!important;height:auto!important;overflow:hidden!important}
   `;
   document.head.appendChild(style);
+
+  const KEY='gymProgressPWA_v1';
 
   function cardState(card){
     if(card.classList.contains('done')) return 'done';
@@ -107,10 +111,80 @@
     }
   }
 
+  function loadWeights(){
+    try{
+      const d=JSON.parse(localStorage.getItem(KEY))||{};
+      return Array.isArray(d.weights)?d.weights.slice():[];
+    }catch(e){return []}
+  }
+
+  function shortDate(s){
+    return new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit'}).format(new Date(`${s}T12:00:00`));
+  }
+
+  function fmt(v){
+    return Number(v).toLocaleString('de-DE',{maximumFractionDigits:1});
+  }
+
+  function lastSevenEntries(){
+    return loadWeights()
+      .filter(x=>x&&x.date&&Number.isFinite(+x.value))
+      .sort((a,b)=>a.date.localeCompare(b.date))
+      .slice(-7);
+  }
+
+  function buildWeightChart(points){
+    if(!points.length)return '<div data-patch-weight-chart style="padding:30px;text-align:center;color:#7c887f;font-size:12px">Noch keine Daten</div>';
+    const W=390,H=280,L=46,R=28,T=30,B=42;
+    const vals=points.map(x=>+x.value);
+    let mn=Math.min(...vals),mx=Math.max(...vals),span=Math.max(.6,mx-mn);
+    let step=span<=2?.5:span<=5?1:2;
+    mn=Math.floor((mn-step)/step)*step;
+    mx=Math.ceil((mx+step)/step)*step;
+    if(mx<=mn)mx=mn+step*2;
+    const plot=W-L-R;
+    const x=i=>points.length===1?L+plot/2:L+i*plot/(points.length-1);
+    const y=v=>T+(mx-v)/(mx-mn)*(H-T-B);
+    let out=`<svg data-patch-weight-chart viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Körpergewicht letzte sieben Einträge">`;
+    for(let v=mn;v<=mx+.001;v+=step){
+      const yy=y(v);
+      out+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#e4eae3"/>`;
+      out+=`<text x="${L-8}" y="${yy+4}" text-anchor="end" font-size="10" fill="#7f8a82">${fmt(v)}</text>`;
+    }
+    if(points.length>1)out+=`<polyline points="${points.map((e,i)=>`${x(i)},${y(+e.value)}`).join(' ')}" fill="none" stroke="#52b966" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+    points.forEach((e,i)=>{
+      const xx=x(i),yy=y(+e.value);
+      const labelY=yy<45?yy+22:yy-10;
+      const anchor=i===0?'start':i===points.length-1?'end':'middle';
+      const tx=i===0?Math.max(L,xx-2):i===points.length-1?Math.min(W-R,xx+2):xx;
+      out+=`<circle cx="${xx}" cy="${yy}" r="5" fill="#63db78" stroke="#fff" stroke-width="2"/>`;
+      out+=`<text x="${tx}" y="${labelY}" text-anchor="${anchor}" font-size="9.5" font-weight="700" fill="#263229">${fmt(+e.value)} kg</text>`;
+      out+=`<text x="${tx}" y="${H-14}" text-anchor="${anchor}" font-size="9" fill="#7d8880">${shortDate(e.date)}</text>`;
+    });
+    return out+'</svg>';
+  }
+
+  function enhanceWeightChart(){
+    const chart=document.getElementById('weightChart');
+    if(!chart)return;
+    const points=lastSevenEntries();
+    const sig=points.map(x=>`${x.date}:${x.value}`).join('|');
+    if(chart.dataset.patchFixedSeven===sig&&chart.querySelector('[data-patch-weight-chart]'))return;
+    chart.dataset.patchFixedSeven=sig;
+    chart.innerHTML=buildWeightChart(points);
+  }
+
   let scheduled=false;
-  function enhance(){scheduled=false;enhanceTraining();enhanceWeightModal()}
+  function enhance(){
+    scheduled=false;
+    enhanceTraining();
+    enhanceWeightModal();
+    enhanceWeightChart();
+  }
   function schedule(){if(scheduled)return;scheduled=true;requestAnimationFrame(enhance)}
   const observer=new MutationObserver(schedule);
   observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  window.addEventListener('resize',schedule);
+  window.addEventListener('storage',schedule);
   schedule();
 })();
